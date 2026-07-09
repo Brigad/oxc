@@ -1,0 +1,283 @@
+name: Publish @roskapp/oxfmt
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: npm version to publish, for example 0.58.0 or 0.58.0-roskapp.1
+        required: true
+        default: 0.58.0
+      npm_tag:
+        description: npm dist-tag
+        required: true
+        default: latest
+      dry_run:
+        description: Build and pack, but do not publish
+        required: true
+        type: boolean
+        default: true
+
+concurrency:
+  group: publish-roskapp-oxfmt-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  OXFMT_VERSION: ${{ inputs.version }}
+  OXFMT_PACKAGE_NAME: "@roskapp/oxfmt"
+  OXFMT_BINDING_PACKAGE_NAME: "@roskapp/oxfmt-binding"
+  OXFMT_REPOSITORY_URL: "git+https://github.com/Brigad/oxc.git"
+  NODE_VERSION: "24"
+
+jobs:
+  validate:
+    name: Validate release input
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate semver
+        run: |
+          node -e "const v = process.env.OXFMT_VERSION; if (!/^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$/.test(v)) throw new Error(`Invalid semver: ${v}`)"
+
+      - name: Show release plan
+        run: |
+          {
+            echo "Package: ${OXFMT_PACKAGE_NAME}"
+            echo "Binding base package: ${OXFMT_BINDING_PACKAGE_NAME}"
+            echo "Version: ${OXFMT_VERSION}"
+            echo "Tag: ${{ inputs.npm_tag }}"
+            echo "Dry run: ${{ inputs.dry_run }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: validate
+    runs-on: ${{ matrix.os }}
+    env:
+      TARGET_CC: ${{ !contains(matrix.target, 'pc-windows-msvc') && 'clang' || '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            build: pnpm run build-napi-release --target x86_64-pc-windows-msvc
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            build: pnpm run build-napi-release --target aarch64-pc-windows-msvc
+          - os: windows-latest
+            target: i686-pc-windows-msvc
+            build: pnpm run build-napi-release --target i686-pc-windows-msvc
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            build: pnpm run build-napi-release --target x86_64-unknown-linux-gnu --use-napi-cross
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            build: pnpm run build-napi-release --target aarch64-unknown-linux-gnu --use-napi-cross
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            build: pnpm run build-napi-release --target armv7-unknown-linux-gnueabihf --use-napi-cross
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            build: pnpm run build-napi-release --target x86_64-unknown-linux-musl -x
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            build: pnpm run build-napi-release --target aarch64-unknown-linux-musl -x
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-musleabihf
+            build: pnpm run build-napi-release --target armv7-unknown-linux-musleabihf -x
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            build: pnpm run build-napi-release --target x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            build: pnpm run build-napi-release --target aarch64-apple-darwin
+          - os: ubuntu-latest
+            target: aarch64-linux-android
+            build: pnpm run build-napi-release --target aarch64-linux-android
+          - os: ubuntu-latest
+            target: armv7-linux-androideabi
+            build: pnpm run build-napi-release --target armv7-linux-androideabi
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-ohos
+            build: pnpm run build-napi-release --target aarch64-unknown-linux-ohos
+          - os: ubuntu-latest
+            target: powerpc64le-unknown-linux-gnu
+            build: pnpm run build-napi-release --target powerpc64le-unknown-linux-gnu --use-napi-cross
+          - os: ubuntu-latest
+            target: riscv64gc-unknown-linux-gnu
+            build: |
+              sudo apt-get update
+              sudo apt-get install gcc-riscv64-linux-gnu g++-riscv64-linux-gnu -y
+              export TARGET_CC=riscv64-linux-gnu-gcc
+              export CXX=riscv64-linux-gnu-g++
+              pnpm run build-napi-release --target riscv64gc-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: riscv64gc-unknown-linux-musl
+            build: pnpm run build-napi-release --target riscv64gc-unknown-linux-musl -x
+          - os: ubuntu-latest
+            target: s390x-unknown-linux-gnu
+            build: export CFLAGS="-fuse-ld=lld" && pnpm run build-napi-release --target s390x-unknown-linux-gnu --use-napi-cross
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - if: runner.os == 'Windows'
+        run: git config --system core.longpaths true
+
+      - uses: actions/checkout@v6
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - run: rustup target add ${{ matrix.target }}
+
+      - uses: goto-bus-stop/setup-zig@v2
+        if: contains(matrix.target, 'musl')
+        with:
+          version: 0.13.0
+
+      - uses: Boshen/setup-ohos-sdk@v1
+        if: contains(matrix.target, 'ohos')
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - run: corepack enable
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: node .github/scripts/prepare-roskapp-oxfmt.mjs
+
+      - name: Build scoped oxfmt binding
+        working-directory: apps/oxfmt
+        run: ${{ matrix.build }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          if-no-files-found: error
+          name: roskapp-oxfmt-binding-${{ matrix.target }}
+          path: |
+            apps/oxfmt/src-js/*.node
+            apps/oxfmt/src-js/*.wasm
+
+  build-freebsd:
+    name: Build x86_64-unknown-freebsd
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build FreeBSD binding
+        uses: cross-platform-actions/action@v1
+        env:
+          DEBUG: napi:*
+          RUSTUP_IO_THREADS: 1
+          OXFMT_VERSION: ${{ env.OXFMT_VERSION }}
+          OXFMT_PACKAGE_NAME: ${{ env.OXFMT_PACKAGE_NAME }}
+          OXFMT_BINDING_PACKAGE_NAME: ${{ env.OXFMT_BINDING_PACKAGE_NAME }}
+          OXFMT_REPOSITORY_URL: ${{ env.OXFMT_REPOSITORY_URL }}
+        with:
+          operating_system: freebsd
+          version: "14.2"
+          memory: 8G
+          cpu_count: 3
+          environment_variables: "DEBUG RUSTUP_IO_THREADS OXFMT_VERSION OXFMT_PACKAGE_NAME OXFMT_BINDING_PACKAGE_NAME OXFMT_REPOSITORY_URL"
+          shell: bash
+          run: |
+            sudo pkg install -y -f curl libnghttp2 node22 npm cmake ca_root_nss
+            curl https://sh.rustup.rs -sSf --output rustup.sh
+            sh rustup.sh -y --profile minimal --default-toolchain stable
+            source "$HOME/.cargo/env"
+            export COREPACK_INTEGRITY_KEYS=0
+            sudo corepack enable
+            pnpm install --frozen-lockfile --ignore-scripts
+            node .github/scripts/prepare-roskapp-oxfmt.mjs
+            cd apps/oxfmt
+            pnpm run build-napi-release --target x86_64-unknown-freebsd
+
+      - uses: actions/upload-artifact@v4
+        with:
+          if-no-files-found: error
+          name: roskapp-oxfmt-binding-x86_64-unknown-freebsd
+          path: apps/oxfmt/src-js/*.node
+
+  publish:
+    name: Publish packages
+    needs: [build, build-freebsd]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      package_path: npm/oxfmt
+      npm_dir: npm/oxfmt-release
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: roskapp-oxfmt-binding-*
+          merge-multiple: true
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - run: corepack enable
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: node .github/scripts/prepare-roskapp-oxfmt.mjs
+
+      - name: Copy native artifacts into oxfmt build directory
+        run: |
+          find artifacts -type f \( -name '*.node' -o -name '*.wasm' \) -print -exec cp {} apps/oxfmt/src-js/ \;
+          test "$(find apps/oxfmt/src-js -type f \( -name '*.node' -o -name '*.wasm' \) | wc -l)" -gt 0
+
+      - name: Build JS package
+        working-directory: apps/oxfmt
+        run: pnpm run build-js
+
+      - run: rm -rf "${npm_dir}" "${package_path}/dist"
+
+      - run: mkdir -p "${npm_dir}"
+
+      - run: pnpm napi create-npm-dirs --package-json-path "${package_path}/package.json" --npm-dir "${npm_dir}"
+
+      - run: pnpm napi artifacts --package-json-path "${package_path}/package.json" --build-output-dir apps/oxfmt/src-js --npm-dir "${npm_dir}"
+
+      - run: cp -r apps/oxfmt/dist "${package_path}/dist"
+
+      - run: npm install -g npm@latest
+
+      - name: Check package manifests
+        run: node .github/scripts/check-roskapp-npm-packages.mjs "${npm_dir}" "${package_path}"
+
+      - name: Dry run pack
+        if: inputs.dry_run
+        run: |
+          pnpm napi pre-publish --dry-run --no-gh-release -t npm --package-json-path "${package_path}/package.json" --npm-dir "${npm_dir}"
+          for dir in "${npm_dir}"/* "${package_path}"; do
+            (cd "$dir" && npm pack --dry-run --json)
+          done
+
+      - name: Configure token fallback
+        if: ${{ !inputs.dry_run && env.NODE_AUTH_TOKEN != '' }}
+        run: echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
+
+      - name: Publish binding packages and main package
+        if: ${{ !inputs.dry_run }}
+        run: |
+          pnpm napi pre-publish --no-gh-release -t npm --package-json-path "${package_path}/package.json" --npm-dir "${npm_dir}"
+          bash .github/scripts/publish-if-needed.sh "${package_path}" --access public --no-git-checks --tag "${{ inputs.npm_tag }}"

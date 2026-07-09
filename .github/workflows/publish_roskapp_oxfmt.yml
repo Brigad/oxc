@@ -236,6 +236,7 @@ jobs:
       id-token: write
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      NPM_CONFIG_PROVENANCE: "false"
       package_path: npm/oxfmt
       npm_dir: npm/oxfmt-release
     steps:

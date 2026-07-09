@@ -2,6 +2,10 @@ use oxc_ast::ast::*;
 use oxc_span::GetSpan;
 use oxc_syntax::precedence::{GetPrecedence, Precedence};
 
+use crate::utils::{
+    format_node_without_trailing_comments::FormatNodeWithoutTrailingComments,
+    typecast::is_type_cast_node,
+};
 use crate::{
     Format,
     ast_nodes::{AstNode, AstNodes},
@@ -353,7 +357,38 @@ fn format_flattened_logical_expression<'a>(
 impl<'a> Format<'a, JsFormatContext<'a>> for BinaryLeftOrRightSide<'a, '_> {
     fn fmt(&self, f: &mut JsFormatter<'_, 'a>) {
         match self {
-            Self::Left { parent } => write!(f, group(parent.left())),
+            Self::Left { parent } => {
+                let right = parent.right();
+                let left_span_end = parent.left().span().end;
+                let comments_between =
+                    f.comments().comments_in_range(left_span_end, right.span().start);
+                let has_inline_line_comment_between = comments_between
+                    .iter()
+                    .any(|comment| comment.is_line() && !comment.preceded_by_newline());
+                let has_own_line_comment_between = comments_between
+                    .iter()
+                    .any(|comment| comment.is_line() && comment.preceded_by_newline());
+                let is_bitwise_and_expression = matches!(
+                    parent.operator(),
+                    BinaryLikeOperator::BinaryOperator(BinaryOperator::BitwiseAnd)
+                );
+                let suppress_left_trailing_comments = is_bitwise_and_expression
+                    && has_inline_line_comment_between
+                    && has_own_line_comment_between;
+
+                if suppress_left_trailing_comments {
+                    write!(
+                        f,
+                        [
+                            group(&FormatNodeWithoutTrailingComments(parent.left())),
+                            "  ",
+                            format_leading_comments(right.span())
+                        ]
+                    );
+                } else {
+                    write!(f, group(parent.left()));
+                }
+            }
             Self::Right {
                 parent: binary_like_expression,
                 inside_condition: inside_parenthesis,
@@ -406,9 +441,9 @@ impl<'a> Format<'a, JsFormatContext<'a>> for BinaryLeftOrRightSide<'a, '_> {
                         write!(
                             f,
                             [
-                                space(),
-                                operator.as_str(),
                                 soft_line_break_or_space(),
+                                operator.as_str(),
+                                space(),
                                 format_with(|f| {
                                     // If the left side of the right logical expression is still a logical expression with
                                     // the same operator, we need to recursively format it inline.
@@ -442,14 +477,51 @@ impl<'a> Format<'a, JsFormatContext<'a>> for BinaryLeftOrRightSide<'a, '_> {
                 }
 
                 let right = binary_like_expression.right();
+                let left_span_end = binary_like_expression.left().span().end;
+                let comments_between =
+                    f.comments().comments_in_range(left_span_end, right.span().start);
+                let has_inline_line_comment_between = comments_between
+                    .iter()
+                    .any(|comment| comment.is_line() && !comment.preceded_by_newline());
+                let has_own_line_comment_between = comments_between
+                    .iter()
+                    .any(|comment| comment.is_line() && comment.preceded_by_newline());
+                let right_has_type_cast_comment = is_type_cast_node(right, f).is_some()
+                    || f.comments().get_type_cast_comment_index(right.span()).is_some();
+                let is_bitwise_and_expression = matches!(
+                    binary_like_expression.operator(),
+                    BinaryLikeOperator::BinaryOperator(BinaryOperator::BitwiseAnd)
+                );
 
                 let operator_and_right_expression = format_with(|f| {
-                    write!(f, [space(), binary_like_expression.operator()]);
-
                     let should_inline = binary_like_expression.should_inline_logical_expression();
 
+                    if !should_inline
+                        && !right.is_jsx()
+                        && ((f.comments().has_leading_own_line_comment(right.span().start)
+                            && !right_has_type_cast_comment)
+                            || (is_bitwise_and_expression
+                                && has_inline_line_comment_between
+                                && has_own_line_comment_between))
+                    {
+                        write!(f, [soft_line_break()]);
+                        if has_inline_line_comment_between {
+                            write!(f, ["  "]);
+                        }
+                        write!(
+                            f,
+                            [
+                                format_leading_comments(right.span()),
+                                binary_like_expression.operator(),
+                                space(),
+                                right
+                            ]
+                        );
+                        return;
+                    }
+
                     if should_inline {
-                        write!(f, [space()]);
+                        write!(f, [space(), binary_like_expression.operator(), space()]);
 
                         if !right.is_jsx()
                             && f.comments().has_leading_own_line_comment(right.span().start)
@@ -457,7 +529,14 @@ impl<'a> Format<'a, JsFormatContext<'a>> for BinaryLeftOrRightSide<'a, '_> {
                             return write!(f, soft_line_indent_or_space(right));
                         }
                     } else {
-                        write!(f, [soft_line_break_or_space()]);
+                        write!(
+                            f,
+                            [
+                                soft_line_break_or_space(),
+                                binary_like_expression.operator(),
+                                space()
+                            ]
+                        );
                     }
 
                     write!(f, right);
@@ -466,6 +545,8 @@ impl<'a> Format<'a, JsFormatContext<'a>> for BinaryLeftOrRightSide<'a, '_> {
                 // Cache as_ast_nodes() calls to avoid repeated conversions
                 let left_ast_nodes = binary_like_expression.left().as_ast_nodes();
                 let right_ast_nodes = right.as_ast_nodes();
+                let add_extra_space_before_inline_comment = has_inline_line_comment_between
+                    && f.comments().has_leading_own_line_comment(right.span().start);
 
                 // Doesn't match prettier that only distinguishes between logical and binary
                 let should_group =
@@ -476,13 +557,17 @@ impl<'a> Format<'a, JsFormatContext<'a>> for BinaryLeftOrRightSide<'a, '_> {
                         || is_same_binary_expression_kind(binary_like_expression, right_ast_nodes)
                         || (*inside_parenthesis && logical_operator.is_some()));
 
+                if f.comments().has_comment_in_range(
+                    binary_like_expression.left().span().end,
+                    right.span().start,
+                ) {
+                    write!(f, [space(), add_extra_space_before_inline_comment.then_some(space())]);
+                }
+
                 match left_ast_nodes {
-                    AstNodes::LogicalExpression(logical) => {
-                        logical.format_trailing_comments(f);
-                    }
-                    AstNodes::BinaryExpression(binary) => {
-                        binary.format_trailing_comments(f);
-                    }
+                    AstNodes::LogicalExpression(logical) => logical.format_trailing_comments(f),
+                    AstNodes::BinaryExpression(binary) => binary.format_trailing_comments(f),
+                    AstNodes::IdentifierReference(ident) => ident.format_trailing_comments(f),
                     _ => {}
                 }
 

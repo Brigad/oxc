@@ -30,6 +30,10 @@ function checkPackage(packageDir) {
 
   console.log(`\n# ${name}@${version}`);
 
+  if (packageJson.publishConfig?.access !== "public") {
+    throw new Error(`${name} must set publishConfig.access to "public".`);
+  }
+
   for (const file of packageJson.files ?? []) {
     const filePath = join(packageDir, file);
     if (!existsSync(filePath)) {

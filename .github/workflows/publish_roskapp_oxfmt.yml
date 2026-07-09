@@ -236,7 +236,6 @@ jobs:
       id-token: write
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      NPM_CONFIG_PROVENANCE: "false"
       package_path: npm/oxfmt
       npm_dir: npm/oxfmt-release
     steps:
@@ -280,8 +279,6 @@ jobs:
       - run: pnpm napi artifacts --package-json-path "${package_path}/package.json" --build-output-dir apps/oxfmt/src-js --npm-dir "${npm_dir}"
 
       - run: cp -r apps/oxfmt/dist "${package_path}/dist"
-
-      - run: npm install -g npm@latest
 
       - name: Check package manifests
         run: node .github/scripts/check-roskapp-npm-packages.mjs "${npm_dir}" "${package_path}"

@@ -7,18 +7,22 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: npm version to publish, for example 0.58.0 or 0.58.0-roskapp.1
+        description: Version for @roskapp/oxfmt, for example 0.58.0-roskapp.1
         required: true
-        default: 0.58.0
+        default: 0.58.0-roskapp.1
       npm_tag:
-        description: npm dist-tag
+        description: npm dist-tag. Use next for test releases, latest for production.
         required: true
-        default: latest
+        default: next
       dry_run:
-        description: Build and pack, but do not publish
+        description: Dry run only. Build and pack, but do not publish.
         required: true
         type: boolean
         default: true
+      confirm_publish:
+        description: To publish, uncheck dry run and type publish here.
+        required: false
+        default: ""
 
 concurrency:
   group: publish-roskapp-oxfmt-${{ github.ref }}
@@ -49,6 +53,12 @@ jobs:
             echo "Tag: ${{ inputs.npm_tag }}"
             echo "Dry run: ${{ inputs.dry_run }}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Require explicit publish confirmation
+        if: ${{ !inputs.dry_run && inputs.confirm_publish != 'publish' }}
+        run: |
+          echo "::error::To publish, uncheck dry run and type 'publish' in the confirmation field."
+          exit 1
 
   build:
     name: Build ${{ matrix.target }}

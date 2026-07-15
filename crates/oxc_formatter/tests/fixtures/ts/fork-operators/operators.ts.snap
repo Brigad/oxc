@@ -1,0 +1,75 @@
+---
+source: crates/oxc_formatter/tests/fixtures/mod.rs
+---
+==================== Input ====================
+const logicalResult = extremelyLongIdentifierAlpha && extremelyLongIdentifierBeta || extremelyLongIdentifierGamma;
+
+const binaryResult = extremelyLongIdentifierAlpha + extremelyLongIdentifierBeta + extremelyLongIdentifierGamma;
+
+const castResult = extremelyLongIdentifierAlpha && /** @type {ExtremelyLongTypeName} */ (extremelyLongIdentifierBeta);
+
+type IntersectionResult = ExtremelyLongTypeNameAlpha & ExtremelyLongTypeNameBeta & ExtremelyLongTypeNameGamma;
+
+==================== Output ====================
+------------------
+{ printWidth: 40 }
+------------------
+const logicalResult =
+  (extremelyLongIdentifierAlpha
+    && extremelyLongIdentifierBeta)
+  || extremelyLongIdentifierGamma;
+
+const binaryResult =
+  extremelyLongIdentifierAlpha
+  + extremelyLongIdentifierBeta
+  + extremelyLongIdentifierGamma;
+
+const castResult =
+  extremelyLongIdentifierAlpha
+  && /** @type {ExtremelyLongTypeName} */ (
+    extremelyLongIdentifierBeta
+  );
+
+type IntersectionResult =
+  ExtremelyLongTypeNameAlpha
+    & ExtremelyLongTypeNameBeta
+    & ExtremelyLongTypeNameGamma;
+
+------------------
+{ printWidth: 80 }
+------------------
+const logicalResult =
+  (extremelyLongIdentifierAlpha && extremelyLongIdentifierBeta)
+  || extremelyLongIdentifierGamma;
+
+const binaryResult =
+  extremelyLongIdentifierAlpha
+  + extremelyLongIdentifierBeta
+  + extremelyLongIdentifierGamma;
+
+const castResult =
+  extremelyLongIdentifierAlpha
+  && /** @type {ExtremelyLongTypeName} */ (extremelyLongIdentifierBeta);
+
+type IntersectionResult = ExtremelyLongTypeNameAlpha
+  & ExtremelyLongTypeNameBeta
+  & ExtremelyLongTypeNameGamma;
+
+-------------------
+{ printWidth: 100 }
+-------------------
+const logicalResult =
+  (extremelyLongIdentifierAlpha && extremelyLongIdentifierBeta) || extremelyLongIdentifierGamma;
+
+const binaryResult =
+  extremelyLongIdentifierAlpha + extremelyLongIdentifierBeta + extremelyLongIdentifierGamma;
+
+const castResult =
+  extremelyLongIdentifierAlpha
+  && /** @type {ExtremelyLongTypeName} */ (extremelyLongIdentifierBeta);
+
+type IntersectionResult = ExtremelyLongTypeNameAlpha
+  & ExtremelyLongTypeNameBeta
+  & ExtremelyLongTypeNameGamma;
+
+===================== End =====================

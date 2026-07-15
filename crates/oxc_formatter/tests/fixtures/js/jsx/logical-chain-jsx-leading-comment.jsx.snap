@@ -56,8 +56,8 @@ const D = () => (
 //    that pushes the collapsed line past `printWidth`.
 const A = () => (
   <div>
-    {someLongConditionA &&
-      someLongConditionB && ( // an explanatory comment that pushes the line past printWidth
+    {someLongConditionA
+      && someLongConditionB && ( // an explanatory comment that pushes the line past printWidth
         <span>content</span>
       )}
   </div>
@@ -79,8 +79,8 @@ const B = () => (
 //    break because the line comment forces a newline.
 const C = () => (
   <div>
-    {a &&
-      b && ( // tiny
+    {a
+      && b && ( // tiny
         <span>x</span>
       )}
   </div>
@@ -104,8 +104,8 @@ const D = () => (
 //    that pushes the collapsed line past `printWidth`.
 const A = () => (
   <div>
-    {someLongConditionA &&
-      someLongConditionB && ( // an explanatory comment that pushes the line past printWidth
+    {someLongConditionA
+      && someLongConditionB && ( // an explanatory comment that pushes the line past printWidth
         <span>content</span>
       )}
   </div>
@@ -127,8 +127,8 @@ const B = () => (
 //    break because the line comment forces a newline.
 const C = () => (
   <div>
-    {a &&
-      b && ( // tiny
+    {a
+      && b && ( // tiny
         <span>x</span>
       )}
   </div>

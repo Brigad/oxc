@@ -4,7 +4,7 @@ use oxc_syntax::precedence::{GetPrecedence, Precedence};
 
 use crate::utils::{
     format_node_without_trailing_comments::FormatNodeWithoutTrailingComments,
-    typecast::is_type_cast_node,
+    typecast::classify_type_cast,
 };
 use crate::{
     Format,
@@ -486,7 +486,7 @@ impl<'a> Format<'a, JsFormatContext<'a>> for BinaryLeftOrRightSide<'a, '_> {
                 let has_own_line_comment_between = comments_between
                     .iter()
                     .any(|comment| comment.is_line() && comment.preceded_by_newline());
-                let right_has_type_cast_comment = is_type_cast_node(right, f).is_some()
+                let right_has_type_cast_comment = classify_type_cast(right.span(), f).is_target()
                     || f.comments().get_type_cast_comment_index(right.span()).is_some();
                 let is_bitwise_and_expression = matches!(
                     binary_like_expression.operator(),

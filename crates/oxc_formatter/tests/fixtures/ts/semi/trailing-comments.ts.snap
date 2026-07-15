@@ -237,8 +237,8 @@ export type Union =
 // No source `;` at all (ASI): nothing to move the comment across
 function asiReturn() {
   return (
-    aLongLongLongLongLongCondition &&
-    anotherLongLongLongLongCondition /* stays */
+    aLongLongLongLongLongCondition
+    && anotherLongLongLongLongCondition /* stays */
   )
 }
 
@@ -532,8 +532,8 @@ export type Union =
 // No source `;` at all (ASI): nothing to move the comment across
 function asiReturn() {
   return (
-    aLongLongLongLongLongCondition &&
-    anotherLongLongLongLongCondition /* stays */
+    aLongLongLongLongLongCondition
+    && anotherLongLongLongLongCondition /* stays */
   );
 }
 

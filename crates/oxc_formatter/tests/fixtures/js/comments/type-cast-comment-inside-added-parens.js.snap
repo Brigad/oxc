@@ -60,8 +60,8 @@ function ret() {
 // Cast binds to `(root)`; the `??` gets formatter-added parens in ternary branches.
 var target = /** @type {ShadowRoot} */ (root).host
   ? /** @type {ShadowRoot} */ (root)
-  : (/** @type {Document} */ (root).head ??
-    /** @type {Document} */ (root.ownerDocument).head);
+  : (/** @type {Document} */ (root).head
+    ?? /** @type {Document} */ (root.ownerDocument).head);
 
 // The corrected form is a fixed point.
 var stable = x ? y : (/** @type {D} */ (b).head ?? c);

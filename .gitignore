@@ -39,6 +39,9 @@ tasks/prettier_conformance/prettier/
 /*.cfg.txt
 /*.dot
 
+# macOS metadata
+.DS_Store
+
 # https://github.com/oraios/serena cache
 .serena/cache
 .serena/project.yml
